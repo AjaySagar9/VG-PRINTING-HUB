@@ -1,11 +1,14 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Footer() {
   return (
     <footer style={styles.footer}>
       <div className="container" style={styles.container}>
         <div style={styles.column}>
-          <h3 style={styles.brand}>VG PRINTING <span style={{color: 'var(--accent-color)'}}>HUB</span></h3>
+          <div style={{marginBottom: '0.5rem', display: 'flex', alignItems: 'flex-start'}}>
+            <Image src="/logo.png" alt="VG Printing Hub Logo" width={250} height={80} style={{objectFit: 'contain', objectPosition: 'left center'}} />
+          </div>
           <p style={styles.text}>
             Your one-stop shop for high-quality, print-on-demand customized corporate gifts.
           </p>

@@ -1,12 +1,13 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Navbar() {
   return (
     <header style={styles.header}>
       <div className="container" style={styles.container}>
         <div style={styles.logoContainer}>
-          <Link href="/" style={styles.logo}>
-            VG PRINTING <span style={styles.logoAccent}>HUB</span>
+          <Link href="/" style={{ ...styles.logo, display: 'flex', alignItems: 'center' }}>
+            <Image src="/navlogo.png" alt="VG Printing Hub Logo" width={140} height={45} style={{ objectFit: 'contain', objectPosition: 'left center' }} priority />
           </Link>
         </div>
         <nav style={styles.nav}>
@@ -16,10 +17,10 @@ export default function Navbar() {
           <Link href="/contact" style={styles.navLink}>Contact</Link>
         </nav>
         <div style={styles.actions}>
-          <Link href="/login" style={{...styles.navLink, marginRight: '1.5rem'}}>
+          <Link href="/login" style={{ ...styles.navLink, marginRight: '1.5rem' }}>
             Login
           </Link>
-          <Link href="/signup" className="btn btn-outline" style={{marginRight: '1rem'}}>
+          <Link href="/signup" className="btn btn-outline" style={{ marginRight: '1rem' }}>
             Sign Up
           </Link>
           <Link href="/cart" className="btn btn-accent">
@@ -43,7 +44,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: '80px',
+    height: '75px',
   },
   logo: {
     fontSize: '1.5rem',
