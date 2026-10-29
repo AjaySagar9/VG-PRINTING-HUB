@@ -1,12 +1,19 @@
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 export default async function Home() {
   // Fetch some products for featured section (mock query if db is empty)
-  const products = await prisma.product.findMany({
-    take: 4,
-    orderBy: { createdAt: 'desc' }
-  });
+  let products = [];
+  try {
+    products = await prisma.product.findMany({
+      take: 4,
+      orderBy: { createdAt: 'desc' }
+    });
+  } catch (err) {
+    console.warn('Database query fallback on homepage:', err.message);
+  }
 
   const featuredProducts = products.length > 0 ? products : [
     { id: '1', name: 'Custom Corporate T-Shirt', price: 499, description: 'High quality cotton' },

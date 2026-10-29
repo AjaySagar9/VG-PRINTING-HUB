@@ -1,17 +1,24 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminProducts() {
-  const products = await prisma.product.findMany({
-    orderBy: { createdAt: 'desc' }
-  });
+  let products = [];
+  try {
+    products = await prisma.product.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+  } catch (err) {
+    console.warn('Error fetching admin products:', err.message);
+  }
 
   return (
     <div className="animate-fade-in">
       <header style={styles.header}>
         <div>
           <h1 style={styles.pageTitle}>Products</h1>
-          <p style={styles.pageSubtitle}>Manage your store's products</p>
+          <p style={styles.pageSubtitle}>Manage your retail & wholesale catalog items</p>
         </div>
         <button className="btn btn-primary">Add New Product</button>
       </header>
@@ -22,7 +29,8 @@ export default async function AdminProducts() {
             <thead>
               <tr>
                 <th style={styles.th}>Name</th>
-                <th style={styles.th}>Price</th>
+                <th style={styles.th}>Retail Price</th>
+                <th style={styles.th}>Wholesale Price</th>
                 <th style={styles.th}>Date Added</th>
                 <th style={styles.th}>Actions</th>
               </tr>
@@ -30,8 +38,13 @@ export default async function AdminProducts() {
             <tbody>
               {products.map(product => (
                 <tr key={product.id} style={styles.tr}>
-                  <td style={styles.td}>{product.name}</td>
+                  <td style={styles.td}>
+                    <strong>{product.name}</strong>
+                  </td>
                   <td style={styles.td}>₹{product.price}</td>
+                  <td style={{ ...styles.td, color: '#059669', fontWeight: '600' }}>
+                    {product.wholesalePrice ? `₹${product.wholesalePrice}` : 'Not set'}
+                  </td>
                   <td style={styles.td}>{new Date(product.createdAt).toLocaleDateString()}</td>
                   <td style={styles.td}>
                     <button style={styles.actionBtn}>Edit</button>

@@ -8,36 +8,160 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  username     String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  email           String    @unique
+  mobile          String    @unique
+  passwordHash    String
+  role            String    @default("RETAILER") // RETAILER, WHOLESALER, ADMIN
+  approvalStatus  String    @default("APPROVED") // APPROVED, PENDING, REJECTED
+  
+  // Wholesaler-specific fields
+  businessName    String?
+  businessType    String?
+  businessAddress String?
+  gstin           String?
+  contactPerson   String?
+  businessWebsite String?
+  wholesaleTier   String?   @default("Tier 1 - Standard Wholesale")
+
+  // Profile & Verification fields
+  avatarUrl        String?
+  isEmailVerified  Boolean   @default(true)
+  isMobileVerified Boolean   @default(true)
+  emailVerifyCode  String?
+  mobileVerifyCode String?
+
+  // Security & Preferences
+  sessionVersion    Int       @default(1)
+  notificationPrefs String?   // JSON string: { emailOrders: true, smsOrders: true, marketingEmails: false, whatsappUpdates: true }
+  isDeleted         Boolean   @default(false)
+  deletedAt         DateTime?
+
+  // Relations
+  addresses    Address[]
+  savedDesigns SavedDesign[]
+
+  // Password reset fields
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+}
+
+model Address {
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId               String   @db.ObjectId
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                 String
+  phone                String
+  street               String
+  city                 String
+  state                String
+  pincode              String
+  addressType          String   @default("Delivery") // Delivery, Billing, Both
+  isDefaultDelivery    Boolean  @default(false)
+  isDefaultBilling     Boolean  @default(false)
+  deliveryInstructions String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now()) @updatedAt
+}
+
+model SavedDesign {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String   @db.ObjectId
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId       String?  @db.ObjectId
+  productName     String
+  designName      String
+  previewSnapshot String   // Data URL or uploaded URL
+  artworkUrl      String?
+  placement       String   @default("Front Center")
+  customText      String?
+  textColor       String?  @default("#ffffff")
+  scale           Float    @default(0.55)
+  offsetY         Float    @default(0)
+  selectedColor   String?
+  selectedSize    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
 }
 
 model Category {
   id       String    @id @default(auto()) @map("_id") @db.ObjectId
   name     String
   slug     String    @unique
+  imageUrl String?
   products Product[]
 }
 
 model Product {
-  id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  name        String
-  description String
-  price       Float
-  imageUrl    String?
-  categoryId  String?   @db.ObjectId
-  category    Category? @relation(fields: [categoryId], references: [id])
-  createdAt   DateTime  @default(now())
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  slug            String?
+  description     String
+  price           Float
+  wholesalePrice  Float?
+  imageUrl        String?
+  images          String[]  @default([])
+  categoryId      String?   @db.ObjectId
+  category        Category? @relation(fields: [categoryId], references: [id])
+  moq             Int       @default(1)
+  wholesaleMoq    Int       @default(25)
+  rating          Float     @default(4.8)
+  ratingCount     Int       @default(45)
+  discountPercent Int       @default(0)
+  colors          String[]  @default([])
+  sizes           String[]  @default([])
+  placements      String[]  @default([])
+  customizable    Boolean   @default(true)
+  badge           String?
+  stock           Int       @default(500)
+  createdAt       DateTime  @default(now())
 }
 
 model Order {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  customerName   String
-  customerEmail  String
-  status         String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, CANCELLED
-  totalAmount    Float
-  products       String   // Storing as JSON string for simplicity
-  createdAt      DateTime @default(now())
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  orderNumber       String?
+  userId            String?  @db.ObjectId
+  customerName      String
+  customerEmail     String
+  customerMobile    String?
+  shippingAddress   String   // JSON string with address, city, state, pincode
+  items             String   // JSON string of items with customization data
+  subtotal          Float
+  discount          Float    @default(0)
+  tax               Float    @default(0)
+  shippingCharge    Float    @default(0)
+  totalAmount       Float
+  paymentMethod     String   @default("RAZORPAY") // RAZORPAY, COD
+  paymentStatus     String   @default("PENDING")  // PENDING, PAID, FAILED, REFUNDED
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+  status            String   @default("Placed")   // Placed, Design Approval, In Production, Dispatched, Delivered, Cancelled
+  trackingCourier   String?
+  trackingNumber    String?
+  trackingUrl       String?
+  customerNotes     String?
+  designApproved    Boolean  @default(false)
+  cancelReason      String?
+  cancelledAt       DateTime?
+  returnStatus      String?  // NONE, REQUESTED, APPROVED, REJECTED
+  returnReason      String?
+  returnedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+}
+
+model Coupon {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  code           String    @unique
+  discountType   String    @default("PERCENTAGE") // PERCENTAGE, FLAT
+  discountValue  Float
+  minOrderAmount Float     @default(0)
+  maxDiscount    Float?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
 }
