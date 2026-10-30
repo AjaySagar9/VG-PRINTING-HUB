@@ -1,8 +1,10 @@
+import path from 'path';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   serverExternalPackages: ['@prisma/client', 'prisma'],
   turbopack: {
-    root: process.cwd(),
+    root: path.resolve('.'),
   },
 };
 
