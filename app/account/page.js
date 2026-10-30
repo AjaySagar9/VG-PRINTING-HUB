@@ -1,424 +1,279 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import AccountSidebar from '@/components/account/AccountSidebar';
+import ProfileTab from '@/components/account/ProfileTab';
+import OrdersTab from '@/components/account/OrdersTab';
+import AddressesTab from '@/components/account/AddressesTab';
+import DesignsTab from '@/components/account/DesignsTab';
+import WholesaleTab from '@/components/account/WholesaleTab';
+import SecurityTab from '@/components/account/SecurityTab';
 
-export default function AccountPage() {
+function AccountContent() {
   const router = useRouter();
-  const { user, loading, logout } = useAuth();
-  const [orders, setOrders] = useState([]);
-  const [ordersLoading, setOrdersLoading] = useState(true);
+  const searchParams = useSearchParams();
+  const { user, loading, logout, refreshUser } = useAuth();
 
+  const tabParam = searchParams.get('tab');
+  const [tabState, setTabState] = useState(null);
+  const activeTab = tabState || tabParam || 'profile';
+
+  const [profileOverride, setProfileOverride] = useState(null);
+  const localUser = profileOverride || user;
+
+  // Auth Protection: redirect if not logged in
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login?redirect=/account');
     }
   }, [user, loading, router]);
 
-  useEffect(() => {
-    if (user) {
-      fetchUserOrders();
-    }
-  }, [user]);
+  const handleSelectTab = (tabId) => {
+    setTabState(tabId);
+    router.replace(`/account?tab=${tabId}`, { scroll: false });
+  };
 
-  const fetchUserOrders = async () => {
-    setOrdersLoading(true);
-    try {
-      const res = await fetch('/api/orders', { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(data.orders || []);
-      }
-    } catch (e) {
-      console.error('Error fetching orders:', e);
-    } finally {
-      setOrdersLoading(false);
+  const handleProfileUpdated = (updatedUser) => {
+    setProfileOverride(updatedUser);
+    if (refreshUser) {
+      refreshUser();
     }
   };
 
-  if (loading || !user) {
+  if (loading || !user || !localUser) {
     return (
-      <div className="container" style={{ padding: '6rem 0', textAlign: 'center' }}>
-        <p style={{ color: 'var(--text-secondary)' }}>Loading your account...</p>
+      <div style={styles.loadingPage}>
+        <div style={styles.loadingSpinner}>⚙️</div>
+        <p style={{ color: 'var(--text-secondary)', marginTop: '0.75rem' }}>
+          Loading your customer dashboard and order history...
+        </p>
       </div>
     );
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Delivered':
-        return { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0' };
-      case 'Dispatched':
-        return { bg: '#eff6ff', text: '#1e40af', border: '#bfdbfe' };
-      case 'In Production':
-        return { bg: '#fdf4ff', text: '#86198f', border: '#f5d0fe' };
-      case 'Design Approval':
-        return { bg: '#fffbeb', text: '#92400e', border: '#fde68a' };
-      case 'Cancelled':
-        return { bg: '#fef2f2', text: '#991b1b', border: '#fecaca' };
-      default:
-        return { bg: 'var(--bg-tertiary)', text: 'var(--text-primary)', border: 'var(--border-color)' };
-    }
-  };
+  const isWholesale = localUser.role === 'WHOLESALER';
 
   return (
     <div style={styles.page}>
       <div className="container">
-        
-        {/* Profile Card Header */}
-        <div style={styles.profileCard}>
-          <div style={styles.profileHeader}>
-            <div style={styles.avatar}>
-              {(user.businessName || user.name || 'U').charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <div style={styles.userTitleRow}>
-                <h1 style={styles.userName}>{user.businessName || user.name}</h1>
-                {user.role === 'WHOLESALER' ? (
-                  user.approvalStatus === 'APPROVED' ? (
-                    <span style={styles.badgeApproved}>✓ Approved Wholesale Partner</span>
-                  ) : (
-                    <span style={styles.badgePending}>⏳ Wholesale Account (Under Review)</span>
-                  )
-                ) : (
-                  <span style={styles.badgeRetail}>Retail Customer</span>
-                )}
-              </div>
-              <div style={styles.userMeta}>
-                <span>📧 {user.email}</span>
-                <span>📞 +91 {user.mobile}</span>
-                {user.gstin && <span>🏛️ GSTIN: {user.gstin}</span>}
-              </div>
-            </div>
-            <button onClick={logout} className="btn btn-outline" style={styles.logoutBtn}>
-              Sign Out
-            </button>
-          </div>
+        {/* Breadcrumbs */}
+        <div style={styles.breadcrumbs}>
+          <Link href="/">Home</Link> &gt; <span>My Account</span> &gt;{' '}
+          <span style={{ color: 'var(--text-primary)', fontWeight: '600', textTransform: 'capitalize' }}>
+            {activeTab}
+          </span>
         </div>
 
-        {/* Order History Section */}
-        <div style={styles.ordersSection}>
-          <div style={styles.sectionHeader}>
-            <h2 style={styles.sectionTitle}>Order History &amp; Tracking</h2>
-            <Link href="/products" className="btn btn-accent" style={{ padding: '8px 18px', fontSize: '0.85rem' }}>
-              + Order New Prints
-            </Link>
+        {/* Mobile Navigation Tabs (visible only on small screens) */}
+        <div style={styles.mobileTabNav}>
+          <button
+            type="button"
+            onClick={() => handleSelectTab('profile')}
+            style={{
+              ...styles.mobileTabBtn,
+              borderBottom: activeTab === 'profile' ? '2px solid var(--accent-color)' : '2px solid transparent',
+              color: activeTab === 'profile' ? 'var(--accent-color)' : 'var(--text-secondary)',
+              fontWeight: activeTab === 'profile' ? '700' : '500',
+            }}
+          >
+            👤 Profile
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectTab('orders')}
+            style={{
+              ...styles.mobileTabBtn,
+              borderBottom: activeTab === 'orders' ? '2px solid var(--accent-color)' : '2px solid transparent',
+              color: activeTab === 'orders' ? 'var(--accent-color)' : 'var(--text-secondary)',
+              fontWeight: activeTab === 'orders' ? '700' : '500',
+            }}
+          >
+            📦 Orders
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectTab('addresses')}
+            style={{
+              ...styles.mobileTabBtn,
+              borderBottom: activeTab === 'addresses' ? '2px solid var(--accent-color)' : '2px solid transparent',
+              color: activeTab === 'addresses' ? 'var(--accent-color)' : 'var(--text-secondary)',
+              fontWeight: activeTab === 'addresses' ? '700' : '500',
+            }}
+          >
+            📍 Addresses
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectTab('designs')}
+            style={{
+              ...styles.mobileTabBtn,
+              borderBottom: activeTab === 'designs' ? '2px solid var(--accent-color)' : '2px solid transparent',
+              color: activeTab === 'designs' ? 'var(--accent-color)' : 'var(--text-secondary)',
+              fontWeight: activeTab === 'designs' ? '700' : '500',
+            }}
+          >
+            🎨 Designs
+          </button>
+          {isWholesale && (
+            <button
+              type="button"
+              onClick={() => handleSelectTab('wholesale')}
+              style={{
+                ...styles.mobileTabBtn,
+                borderBottom: activeTab === 'wholesale' ? '2px solid var(--accent-color)' : '2px solid transparent',
+                color: activeTab === 'wholesale' ? 'var(--accent-color)' : 'var(--text-secondary)',
+                fontWeight: activeTab === 'wholesale' ? '700' : '500',
+              }}
+            >
+              🏢 Wholesale
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => handleSelectTab('security')}
+            style={{
+              ...styles.mobileTabBtn,
+              borderBottom: activeTab === 'security' ? '2px solid var(--accent-color)' : '2px solid transparent',
+              color: activeTab === 'security' ? 'var(--accent-color)' : 'var(--text-secondary)',
+              fontWeight: activeTab === 'security' ? '700' : '500',
+            }}
+          >
+            🔒 Security
+          </button>
+        </div>
+
+        {/* Dashboard 2-Column Grid */}
+        <div style={styles.dashboardGrid}>
+          {/* Desktop Left Sidebar */}
+          <div style={styles.sidebarColumn}>
+            <AccountSidebar
+              user={localUser}
+              activeTab={activeTab}
+              onSelectTab={handleSelectTab}
+              onLogout={logout}
+            />
           </div>
 
-          {ordersLoading ? (
-            <div style={styles.loadingBox}>
-              <p>Fetching your orders and tracking records...</p>
-            </div>
-          ) : orders.length > 0 ? (
-            <div style={styles.ordersList}>
-              {orders.map((order) => {
-                const statusStyle = getStatusColor(order.status);
+          {/* Main Content Area */}
+          <main style={styles.contentColumn}>
+            {activeTab === 'profile' && (
+              <ProfileTab
+                user={localUser}
+                onProfileUpdated={handleProfileUpdated}
+              />
+            )}
 
-                return (
-                  <div key={order.id} style={styles.orderCard}>
-                    <div style={styles.orderTopBar}>
-                      <div>
-                        <div style={styles.orderNumber}>
-                          Order #{order.orderNumber || order.id.slice(-8).toUpperCase()}
-                        </div>
-                        <div style={styles.orderDate}>
-                          Placed on {new Date(order.createdAt).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </div>
-                      </div>
+            {activeTab === 'orders' && (
+              <OrdersTab />
+            )}
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                        <span
-                          style={{
-                            ...styles.statusBadge,
-                            backgroundColor: statusStyle.bg,
-                            color: statusStyle.text,
-                            border: `1px solid ${statusStyle.border}`,
-                          }}
-                        >
-                          ● {order.status}
-                        </span>
+            {activeTab === 'addresses' && (
+              <AddressesTab user={localUser} />
+            )}
 
-                        <div style={styles.orderTotal}>
-                          ₹{order.totalAmount}
-                        </div>
-                      </div>
-                    </div>
+            {activeTab === 'designs' && (
+              <DesignsTab user={localUser} />
+            )}
 
-                    {/* Items Preview */}
-                    <div style={styles.orderItemsPreview}>
-                      {order.items && order.items.map((it, idx) => (
-                        <div key={idx} style={styles.itemRow}>
-                          <img
-                            src={it.customization?.previewSnapshot || it.imageUrl || '/navlogo.png'}
-                            alt={it.name}
-                            style={styles.itemThumb}
-                          />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={styles.itemTitle}>{it.name}</div>
-                            <div style={styles.itemMeta}>
-                              Qty: <strong>{it.quantity}</strong>
-                              {it.selectedSize ? ` · Size: ${it.selectedSize}` : ''}
-                              {it.customization ? ` · Placement: ${it.customization.placement}` : ''}
-                            </div>
-                          </div>
-                          <div style={styles.itemPrice}>
-                            ₹{it.unitPrice * it.quantity}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+            {activeTab === 'wholesale' && isWholesale && (
+              <WholesaleTab
+                user={localUser}
+                onProfileUpdated={handleProfileUpdated}
+              />
+            )}
 
-                    {/* Bottom Actions */}
-                    <div style={styles.orderBottomBar}>
-                      <div>
-                        {order.trackingNumber ? (
-                          <span style={styles.trackingInfo}>
-                            🚚 Courier: <strong>{order.trackingCourier || 'Standard'}</strong> (AWB: {order.trackingNumber})
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                            Payment: <strong>{order.paymentMethod}</strong> ({order.paymentStatus})
-                          </span>
-                        )}
-                      </div>
-
-                      <Link
-                        href={`/orders/${order.id}`}
-                        className="btn btn-outline"
-                        style={{ padding: '6px 16px', fontSize: '0.85rem' }}
-                      >
-                        Track Order &amp; View Design &rarr;
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={styles.emptyOrders}>
-              <span style={{ fontSize: '3rem' }}>📦</span>
-              <h3 style={{ marginTop: '0.75rem', marginBottom: '0.25rem' }}>No orders yet</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
-                When you place corporate or personalized print orders, they will appear here with live tracking.
-              </p>
-              <Link href="/products" className="btn btn-primary">
-                Explore Print Catalog
-              </Link>
-            </div>
-          )}
+            {activeTab === 'security' && (
+              <SecurityTab
+                user={localUser}
+                onProfileUpdated={handleProfileUpdated}
+              />
+            )}
+          </main>
         </div>
       </div>
     </div>
   );
 }
 
+export default function AccountPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={styles.loadingPage}>
+          <div style={styles.loadingSpinner}>⚙️</div>
+          <p style={{ color: 'var(--text-secondary)', marginTop: '0.75rem' }}>
+            Loading Account Dashboard...
+          </p>
+        </div>
+      }
+    >
+      <AccountContent />
+    </Suspense>
+  );
+}
+
 const styles = {
   page: {
-    padding: '3rem 0 5rem',
+    padding: '2rem 0 5rem',
     backgroundColor: 'var(--bg-secondary)',
     minHeight: '85vh',
   },
-  profileCard: {
-    backgroundColor: 'white',
-    borderRadius: 'var(--radius-lg)',
-    padding: '2rem',
-    border: '1px solid var(--border-color)',
-    boxShadow: 'var(--shadow-sm)',
-    marginBottom: '2.5rem',
-  },
-  profileHeader: {
+  loadingPage: {
+    padding: '8rem 1rem',
+    textAlign: 'center',
+    backgroundColor: 'var(--bg-secondary)',
+    minHeight: '80vh',
     display: 'flex',
-    alignItems: 'center',
-    gap: '1.5rem',
-    flexWrap: 'wrap',
-  },
-  avatar: {
-    width: '64px',
-    height: '64px',
-    borderRadius: '50%',
-    backgroundColor: 'var(--accent-color)',
-    color: 'white',
-    fontSize: '1.75rem',
-    fontWeight: '700',
-    display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  userTitleRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    flexWrap: 'wrap',
-    marginBottom: '0.25rem',
+  loadingSpinner: {
+    fontSize: '2.5rem',
+    animation: 'spin 1.5s linear infinite',
   },
-  userName: {
-    fontSize: '1.5rem',
-    color: 'var(--text-primary)',
-  },
-  badgeApproved: {
-    backgroundColor: '#ecfdf5',
-    color: '#065f46',
-    border: '1px solid #a7f3d0',
-    fontSize: '0.75rem',
-    fontWeight: '700',
-    padding: '4px 10px',
-    borderRadius: '9999px',
-  },
-  badgePending: {
-    backgroundColor: '#fffbeb',
-    color: '#92400e',
-    border: '1px solid #fde68a',
-    fontSize: '0.75rem',
-    fontWeight: '700',
-    padding: '4px 10px',
-    borderRadius: '9999px',
-  },
-  badgeRetail: {
-    backgroundColor: 'var(--bg-tertiary)',
-    color: 'var(--text-secondary)',
-    fontSize: '0.75rem',
-    fontWeight: '600',
-    padding: '4px 10px',
-    borderRadius: '9999px',
-  },
-  userMeta: {
-    display: 'flex',
-    gap: '1.25rem',
-    fontSize: '0.875rem',
-    color: 'var(--text-secondary)',
-    flexWrap: 'wrap',
-  },
-  logoutBtn: {
-    marginLeft: 'auto',
+  breadcrumbs: {
     fontSize: '0.85rem',
-    padding: '8px 16px',
-  },
-  ordersSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1.5rem',
-  },
-  sectionHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: '1rem',
-  },
-  sectionTitle: {
-    fontSize: '1.5rem',
-    color: 'var(--text-primary)',
-  },
-  ordersList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1.25rem',
-  },
-  orderCard: {
-    backgroundColor: 'white',
-    borderRadius: 'var(--radius-lg)',
-    border: '1px solid var(--border-color)',
-    boxShadow: 'var(--shadow-sm)',
-    padding: '1.5rem',
-  },
-  orderTopBar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottom: '1px solid var(--border-color)',
-    paddingBottom: '1rem',
-    marginBottom: '1rem',
-    flexWrap: 'wrap',
-    gap: '0.75rem',
-  },
-  orderNumber: {
-    fontSize: '1.1rem',
-    fontWeight: '700',
-    color: 'var(--text-primary)',
-  },
-  orderDate: {
-    fontSize: '0.8rem',
     color: 'var(--text-secondary)',
-  },
-  statusBadge: {
-    fontSize: '0.75rem',
-    fontWeight: '700',
-    padding: '4px 12px',
-    borderRadius: '9999px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  orderTotal: {
-    fontSize: '1.25rem',
-    fontWeight: '800',
-    color: 'var(--text-primary)',
-  },
-  orderItemsPreview: {
+    marginBottom: '1.5rem',
     display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-    marginBottom: '1rem',
-  },
-  itemRow: {
-    display: 'flex',
+    gap: '0.5rem',
     alignItems: 'center',
-    gap: '0.75rem',
   },
-  itemThumb: {
-    width: '44px',
-    height: '44px',
-    borderRadius: 'var(--radius-sm)',
-    objectFit: 'cover',
-    backgroundColor: 'var(--bg-tertiary)',
-    flexShrink: 0,
-  },
-  itemTitle: {
-    fontSize: '0.9rem',
-    fontWeight: '600',
-    color: 'var(--text-primary)',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
+  mobileTabNav: {
+    display: 'none',
+    overflowX: 'auto',
     whiteSpace: 'nowrap',
-  },
-  itemMeta: {
-    fontSize: '0.75rem',
-    color: 'var(--text-secondary)',
-  },
-  itemPrice: {
-    fontSize: '0.85rem',
-    fontWeight: '700',
-    color: 'var(--text-primary)',
-  },
-  orderBottomBar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTop: '1px solid var(--border-color)',
-    paddingTop: '1rem',
-    flexWrap: 'wrap',
-    gap: '0.75rem',
-  },
-  trackingInfo: {
-    fontSize: '0.85rem',
-    color: '#1e40af',
-  },
-  emptyOrders: {
     backgroundColor: 'white',
-    borderRadius: 'var(--radius-lg)',
-    padding: '4rem 2rem',
-    textAlign: 'center',
+    borderRadius: 'var(--radius-md)',
+    padding: '4px 8px',
     border: '1px solid var(--border-color)',
+    marginBottom: '1.5rem',
+    gap: '0.5rem',
   },
-  loadingBox: {
-    padding: '3rem',
-    textAlign: 'center',
-    color: 'var(--text-secondary)',
-  }
+  mobileTabBtn: {
+    padding: '8px 14px',
+    fontSize: '0.85rem',
+    cursor: 'pointer',
+    backgroundColor: 'transparent',
+    borderTop: 'none',
+    borderLeft: 'none',
+    borderRight: 'none',
+  },
+  dashboardGrid: {
+    display: 'grid',
+    gridTemplateColumns: '300px 1fr',
+    gap: '2rem',
+    alignItems: 'start',
+  },
+  sidebarColumn: {
+    position: 'sticky',
+    top: '90px',
+  },
+  contentColumn: {
+    minWidth: 0,
+  },
 };

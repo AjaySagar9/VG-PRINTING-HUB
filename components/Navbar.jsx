@@ -63,14 +63,18 @@ export default function Navbar() {
                 </span>
               )}
 
-              <Link href="/account" style={styles.ordersLink} title="View your order history & tracking">
-                📦 My Orders
+              <Link href="/account" style={styles.ordersLink} title="Customer Profile & Account Settings">
+                👤 My Account
               </Link>
 
-              <div style={styles.userInfo}>
+              <Link href="/account?tab=orders" style={{ ...styles.ordersLink, backgroundColor: 'transparent', border: '1px solid var(--border-color)' }} title="View your order history & tracking">
+                📦 Orders
+              </Link>
+
+              <Link href="/account" style={styles.userInfo} title="View account profile">
                 <span style={styles.userName}>{user.businessName || user.name}</span>
                 <span style={styles.userEmail}>{user.email}</span>
-              </div>
+              </Link>
 
               <button
                 onClick={logout}

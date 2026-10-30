@@ -50,6 +50,13 @@ export async function POST(request) {
       );
     }
 
+    if (user.isDeleted) {
+      return NextResponse.json(
+        { error: 'This account has been deactivated or deleted. Please contact support.' },
+        { status: 403 }
+      );
+    }
+
     // Verify password hash
     const isPasswordValid = await verifyPassword(password, user.passwordHash);
     if (!isPasswordValid) {
@@ -65,6 +72,7 @@ export async function POST(request) {
       email: user.email,
       role: user.role,
       approvalStatus: user.approvalStatus,
+      sessionVersion: user.sessionVersion || 1,
     });
 
     // Set secure HTTP-only cookie

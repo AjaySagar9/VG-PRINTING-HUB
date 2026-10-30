@@ -27,6 +27,7 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState('RAZORPAY'); // 'RAZORPAY' | 'COD'
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [savedAddresses, setSavedAddresses] = useState([]);
 
   // Prefill details if user is logged in
   useEffect(() => {
@@ -39,6 +40,27 @@ export default function CheckoutPage() {
         address: user.businessAddress || prev.address,
         gstin: user.gstin || prev.gstin,
       }));
+
+      fetch('/api/user/addresses')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data && data.addresses && data.addresses.length > 0) {
+            setSavedAddresses(data.addresses);
+            const def = data.addresses.find((a) => a.isDefaultDelivery) || data.addresses[0];
+            if (def) {
+              setFormData((prev) => ({
+                ...prev,
+                name: def.name || prev.name,
+                mobile: def.phone || prev.mobile,
+                address: def.street || prev.address,
+                city: def.city || prev.city,
+                state: def.state || prev.state,
+                pincode: def.pincode || prev.pincode,
+              }));
+            }
+          }
+        })
+        .catch(() => {});
     }
   }, [user]);
 
@@ -286,6 +308,48 @@ export default function CheckoutPage() {
             {/* 2. Shipping Address */}
             <div style={styles.sectionCard}>
               <h2 style={styles.sectionTitle}>2. Shipping &amp; Delivery Address</h2>
+
+              {savedAddresses.length > 0 && (
+                <div style={{ marginBottom: '1.25rem', backgroundColor: 'var(--bg-secondary)', padding: '12px 14px', borderRadius: 'var(--radius-md)' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
+                    SELECT FROM SAVED ADDRESSES:
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {savedAddresses.map((sa) => {
+                      const isSelected = formData.address === sa.street && formData.pincode === sa.pincode;
+                      return (
+                        <button
+                          key={sa.id}
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              name: sa.name || prev.name,
+                              mobile: sa.phone || prev.mobile,
+                              address: sa.street,
+                              city: sa.city,
+                              state: sa.state,
+                              pincode: sa.pincode,
+                            }));
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 'var(--radius-md)',
+                            border: isSelected ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
+                            backgroundColor: isSelected ? '#fff7ed' : 'white',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <strong>{sa.name}</strong> ({sa.city} - {sa.pincode})
+                          {sa.isDefaultDelivery && <span style={{ marginLeft: '4px', color: '#059669', fontSize: '0.7rem' }}>✓ Default</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="input-group">
                 <label className="input-label" htmlFor="address">Street Address, Building, Floor *</label>

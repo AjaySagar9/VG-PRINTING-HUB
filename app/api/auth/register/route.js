@@ -140,6 +140,7 @@ export async function POST(request) {
       email: newUser.email,
       role: newUser.role,
       approvalStatus: newUser.approvalStatus,
+      sessionVersion: 1,
     });
 
     // 11. Set HTTP-only cookie
