@@ -68,7 +68,7 @@ export async function POST(request) {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
             folder: 'vg_printing_hub/artworks',
-            resource_type: isPdf ? 'raw' : 'auto',
+            resource_type: isPdf ? 'raw' : 'image',
             public_id: `artwork_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           },
           (err, result) => {
