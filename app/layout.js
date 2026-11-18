@@ -5,6 +5,7 @@ import Footer from "../components/Footer";
 import { AuthProvider } from "../components/AuthProvider";
 import { CartProvider } from "../components/CartProvider";
 import WholesaleBanner from "../components/WholesaleBanner";
+import WhatsAppButton from "../components/WhatsAppButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,6 +32,7 @@ export default function RootLayout({ children }) {
             <WholesaleBanner />
             <main style={{ flex: 1 }}>{children}</main>
             <Footer />
+            <WhatsAppButton />
           </CartProvider>
         </AuthProvider>
       </body>
