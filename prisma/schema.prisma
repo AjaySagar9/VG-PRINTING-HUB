@@ -84,6 +84,8 @@ model SavedDesign {
   offsetY         Float    @default(0)
   selectedColor   String?
   selectedSize    String?
+  instructions    String?
+  sizeBreakdown   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
 }
@@ -113,8 +115,11 @@ model Product {
   ratingCount     Int       @default(45)
   discountPercent Int       @default(0)
   colors          String[]  @default([])
+  disabledColors  String[]  @default([])
+  colorImages     String?   // JSON map: { "#ffffff": "url", "#1a1a1a": "url" }
   sizes           String[]  @default([])
   placements      String[]  @default([])
+  pricingTiers    String?   // JSON array: [ { minQty, maxQty, price, wholesalePrice } ]
   customizable    Boolean   @default(true)
   badge           String?
   stock           Int       @default(500)

@@ -12,6 +12,7 @@ export default function CartPage() {
   const {
     items,
     updateQuantity,
+    updateSizeBreakdown,
     removeItem,
     clearCart,
     quote,
@@ -30,6 +31,10 @@ export default function CartPage() {
   // Custom design inspection modal
   const [activeDesignModal, setActiveDesignModal] = useState(null);
 
+  // Size breakdown edit modal
+  const [editingSizeItem, setEditingSizeItem] = useState(null);
+  const [tempBreakdown, setTempBreakdown] = useState({});
+
   const handleApplyCoupon = async (e) => {
     e.preventDefault();
     setCouponError('');
@@ -44,6 +49,27 @@ export default function CartPage() {
     } finally {
       setApplyingCoupon(false);
     }
+  };
+
+  const openSizeEditModal = (item) => {
+    setEditingSizeItem(item);
+    setTempBreakdown(item.sizeBreakdown ? { ...item.sizeBreakdown } : {});
+  };
+
+  const handleSaveSizeBreakdown = () => {
+    if (!editingSizeItem) return;
+    const moq = user?.role === 'WHOLESALER' && user?.approvalStatus === 'APPROVED'
+      ? (editingSizeItem.wholesaleMoq || 20)
+      : (editingSizeItem.moq || 1);
+
+    const totalQty = Object.values(tempBreakdown).reduce((sum, v) => sum + (parseInt(v, 10) || 0), 0);
+    if (totalQty < moq) {
+      alert(`Minimum required order quantity is ${moq} units. Currently selected: ${totalQty}.`);
+      return;
+    }
+
+    updateSizeBreakdown(editingSizeItem.id, tempBreakdown);
+    setEditingSizeItem(null);
   };
 
   if (items.length === 0) {
@@ -91,6 +117,9 @@ export default function CartPage() {
                 ? (item.wholesaleMoq || 20)
                 : (item.moq || 1);
 
+              const hasBreakdown = item.sizeBreakdown && Object.keys(item.sizeBreakdown).length > 0;
+              const unitPriceToDisplay = item.unitPrice || item.price;
+
               return (
                 <div key={item.id} style={styles.cartItemCard}>
                   {/* Thumbnail */}
@@ -107,15 +136,22 @@ export default function CartPage() {
 
                   {/* Info */}
                   <div style={styles.itemInfo}>
-                    <Link href={`/products/${item.productId}`} style={styles.itemTitleLink}>
-                      <h3 style={styles.itemName}>{item.name}</h3>
-                    </Link>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <Link href={`/products/${item.productId}`} style={styles.itemTitleLink}>
+                        <h3 style={styles.itemName}>{item.name}</h3>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(item.id)}
+                        style={styles.removeItemBtn}
+                        title="Remove item"
+                      >
+                        🗑️
+                      </button>
+                    </div>
 
                     {/* Variant tags */}
                     <div style={styles.variantTags}>
-                      {item.selectedSize && (
-                        <span style={styles.tag}>Size: <strong>{item.selectedSize}</strong></span>
-                      )}
                       {item.selectedColor && (
                         <span style={styles.tag}>
                           Color: 
@@ -133,14 +169,52 @@ export default function CartPage() {
                           />
                         </span>
                       )}
+
                       {item.customization?.placement && (
                         <span style={styles.tag}>Zone: {item.customization.placement}</span>
                       )}
+
+                      {item.appliedTier && (
+                        <span style={{ ...styles.tag, backgroundColor: '#fff7ed', color: '#c2410c', fontWeight: '600' }}>
+                          Tier: {item.appliedTier.minQty}{item.appliedTier.maxQty ? `-${item.appliedTier.maxQty}` : '+'} pcs
+                        </span>
+                      )}
                     </div>
 
-                    {/* Custom design link */}
+                    {/* Size breakdown chips or standard size */}
+                    {hasBreakdown ? (
+                      <div style={styles.sizeBreakdownBox}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)' }}>
+                            SIZE BREAKDOWN ({item.quantity} total pcs):
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => openSizeEditModal(item)}
+                            style={styles.editSizesBtn}
+                          >
+                            ✏️ Edit Sizes
+                          </button>
+                        </div>
+                        <div style={styles.breakdownChips}>
+                          {Object.entries(item.sizeBreakdown)
+                            .filter(([_, q]) => q > 0)
+                            .map(([sz, q]) => (
+                              <span key={sz} style={styles.breakdownChip}>
+                                <strong>{sz}:</strong> {q}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    ) : item.selectedSize ? (
+                      <div style={{ marginTop: '0.35rem', fontSize: '0.8rem' }}>
+                        Size / Model: <strong>{item.selectedSize}</strong>
+                      </div>
+                    ) : null}
+
+                    {/* Custom design inspection link */}
                     {item.customization && (
-                      <div style={{ marginTop: '0.5rem' }}>
+                      <div style={{ marginTop: '0.6rem' }}>
                         <button
                           type="button"
                           onClick={() => setActiveDesignModal(item)}
@@ -153,52 +227,44 @@ export default function CartPage() {
 
                     {/* Quantity & Unit Price */}
                     <div style={styles.quantityRow}>
-                      <div style={styles.qtyPicker}>
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.id, Math.max(moq, item.quantity - 1))}
-                          style={styles.qtyBtn}
-                          disabled={item.quantity <= moq}
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min={moq}
-                          value={item.quantity}
-                          onChange={(e) => updateQuantity(item.id, Math.max(moq, parseInt(e.target.value) || moq))}
-                          style={styles.qtyInput}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          style={styles.qtyBtn}
-                        >
-                          +
-                        </button>
-                      </div>
+                      {!hasBreakdown && (
+                        <div style={styles.qtyPicker}>
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.id, Math.max(moq, item.quantity - 1))}
+                            style={styles.qtyBtn}
+                            disabled={item.quantity <= moq}
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min={moq}
+                            value={item.quantity}
+                            onChange={(e) => updateQuantity(item.id, Math.max(moq, parseInt(e.target.value, 10) || moq))}
+                            style={styles.qtyInput}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            style={styles.qtyBtn}
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
 
                       <div style={styles.unitPriceText}>
-                        {user?.role === 'WHOLESALER' && user?.approvalStatus === 'APPROVED' && item.wholesalePrice ? (
-                          <span>
-                            <strong style={{ color: '#059669' }}>₹{item.wholesalePrice}</strong> / unit
-                            <span style={{ fontSize: '0.75rem', textDecoration: 'line-through', color: '#94a3b8', marginLeft: '6px' }}>
-                              ₹{item.price}
-                            </span>
+                        <span>₹{unitPriceToDisplay} / unit</span>
+                        {item.price > unitPriceToDisplay && (
+                          <span style={{ fontSize: '0.75rem', textDecoration: 'line-through', color: '#94a3b8', marginLeft: '6px' }}>
+                            ₹{item.price}
                           </span>
-                        ) : (
-                          <span>₹{item.price} / unit</span>
                         )}
+                        <span style={{ fontWeight: '700', marginLeft: '12px', color: 'var(--text-primary)' }}>
+                          Total: ₹{(unitPriceToDisplay * item.quantity).toLocaleString('en-IN')}
+                        </span>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => removeItem(item.id)}
-                        style={styles.removeItemBtn}
-                        title="Remove item"
-                      >
-                        🗑️ Remove
-                      </button>
                     </div>
 
                     {item.quantity < moq && (
@@ -224,7 +290,9 @@ export default function CartPage() {
                     <div>
                       <span style={{ fontWeight: '700', color: '#059669' }}>✓ {couponData.code} Applied</span>
                       <div style={{ fontSize: '0.75rem', color: '#065f46' }}>
-                        {couponData.discountType === 'PERCENTAGE' ? `${couponData.discountValue}% discount applied` : `₹${couponData.discountValue} flat off`}
+                        {couponData.discountType === 'PERCENTAGE'
+                          ? `${couponData.discountValue}% discount applied`
+                          : `₹${couponData.discountValue} flat off`}
                       </div>
                     </div>
                     <button type="button" onClick={removeCoupon} style={styles.removeCouponBtn}>
@@ -257,12 +325,12 @@ export default function CartPage() {
                 )}
               </div>
 
-              {/* Calculation Rows */}
+              {/* Calculation Breakdown Rows */}
               <div style={styles.breakdownRows}>
                 <div style={styles.row}>
                   <span style={styles.rowLabel}>Subtotal</span>
                   <span style={styles.rowValue}>
-                    ₹{quote ? quote.subtotal : items.reduce((sum, i) => sum + (i.price * i.quantity), 0)}
+                    ₹{quote ? quote.subtotal.toLocaleString('en-IN') : items.reduce((sum, i) => sum + ((i.unitPrice || i.price) * i.quantity), 0).toLocaleString('en-IN')}
                   </span>
                 </div>
 
@@ -272,7 +340,18 @@ export default function CartPage() {
                       Wholesale B2B Savings
                     </span>
                     <span style={{ ...styles.rowValue, color: '#059669', fontWeight: '600' }}>
-                      -₹{quote.totalWholesaleSavings}
+                      -₹{quote.totalWholesaleSavings.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                )}
+
+                {quote?.totalRetailTierSavings > 0 && (
+                  <div style={styles.row}>
+                    <span style={{ ...styles.rowLabel, color: '#059669', fontWeight: '600' }}>
+                      Volume Tier Savings
+                    </span>
+                    <span style={{ ...styles.rowValue, color: '#059669', fontWeight: '600' }}>
+                      -₹{quote.totalRetailTierSavings.toLocaleString('en-IN')}
                     </span>
                   </div>
                 )}
@@ -283,7 +362,7 @@ export default function CartPage() {
                       Coupon Discount ({quote.appliedCoupon?.code})
                     </span>
                     <span style={{ ...styles.rowValue, color: '#059669', fontWeight: '600' }}>
-                      -₹{quote.couponDiscount}
+                      -₹{quote.couponDiscount.toLocaleString('en-IN')}
                     </span>
                   </div>
                 )}
@@ -291,7 +370,7 @@ export default function CartPage() {
                 <div style={styles.row}>
                   <span style={styles.rowLabel}>GST Tax (18% Standard)</span>
                   <span style={styles.rowValue}>
-                    {loadingQuote ? '...' : `₹${quote?.tax || Math.round(items.reduce((s, i) => s + (i.price * i.quantity), 0) * 0.18)}`}
+                    {loadingQuote ? '...' : `₹${(quote?.tax || 0).toLocaleString('en-IN')}`}
                   </span>
                 </div>
 
@@ -309,7 +388,7 @@ export default function CartPage() {
                 <div style={{ ...styles.row, borderTop: '2px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
                   <span style={styles.totalLabel}>Total Amount</span>
                   <span style={styles.totalValue}>
-                    {loadingQuote ? '...' : `₹${quote?.totalAmount || '...'}`}
+                    {loadingQuote ? '...' : `₹${(quote?.totalAmount || 0).toLocaleString('en-IN')}`}
                   </span>
                 </div>
               </div>
@@ -341,7 +420,7 @@ export default function CartPage() {
         <div style={styles.modalOverlay} onClick={() => setActiveDesignModal(null)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <h3 style={{ fontSize: '1.25rem' }}>Customized Artwork Preview</h3>
+              <h3 style={{ fontSize: '1.25rem', margin: 0 }}>Customized Artwork &amp; Placement</h3>
               <button
                 type="button"
                 onClick={() => setActiveDesignModal(null)}
@@ -351,33 +430,139 @@ export default function CartPage() {
               </button>
             </div>
 
-            <div style={{ textAlign: 'center', backgroundColor: '#f1f5f9', padding: '1.5rem', borderRadius: 'var(--radius-md)' }}>
+            <div style={{ textAlign: 'center', backgroundColor: '#f1f5f9', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
               <img
                 src={activeDesignModal.customization?.previewSnapshot || activeDesignModal.imageUrl}
                 alt="Customized Artwork"
-                style={{ maxWidth: '100%', maxHeight: '380px', objectFit: 'contain' }}
+                style={{ maxWidth: '100%', maxHeight: '320px', objectFit: 'contain', borderRadius: 'var(--radius-md)' }}
               />
             </div>
 
             <div style={styles.designSpecs}>
-              <div><strong>Item:</strong> {activeDesignModal.name}</div>
+              <div><strong>Product:</strong> {activeDesignModal.name}</div>
               <div><strong>Placement Zone:</strong> {activeDesignModal.customization?.placement}</div>
               {activeDesignModal.customization?.logoFileName && (
-                <div><strong>Uploaded Artwork:</strong> {activeDesignModal.customization.logoFileName}</div>
+                <div>
+                  <strong>Artwork File:</strong> {activeDesignModal.customization.logoFileName}{' '}
+                  {activeDesignModal.customization?.logoUrl && (
+                    <a
+                      href={activeDesignModal.customization.logoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--accent-color)', marginLeft: '6px' }}
+                    >
+                      (Download / View)
+                    </a>
+                  )}
+                </div>
               )}
               {activeDesignModal.customization?.customText && (
-                <div><strong>Custom Imprint Text:</strong> &ldquo;{activeDesignModal.customization.customText}&rdquo;</div>
+                <div><strong>Custom Imprint Text:</strong> &ldquo;{activeDesignModal.customization.customText}&rdquo; ({activeDesignModal.customization.textFont || 'Standard'})</div>
+              )}
+              {activeDesignModal.customization?.instructions && (
+                <div><strong>Special Instructions:</strong> <em>{activeDesignModal.customization.instructions}</em></div>
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setActiveDesignModal(null)}
-              className="btn btn-primary"
-              style={{ width: '100%' }}
-            >
-              Close Preview
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <Link
+                href={`/products/${activeDesignModal.productId}`}
+                className="btn btn-outline"
+                style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}
+              >
+                ✏️ Re-customize on Product Page
+              </Link>
+              <button
+                type="button"
+                onClick={() => setActiveDesignModal(null)}
+                className="btn btn-primary"
+                style={{ flex: 1 }}
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SIZE BREAKDOWN EDIT MODAL */}
+      {editingSizeItem && (
+        <div style={styles.modalOverlay} onClick={() => setEditingSizeItem(null)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ fontSize: '1.25rem', margin: 0 }}>Edit Size Quantities</h3>
+              <button
+                type="button"
+                onClick={() => setEditingSizeItem(null)}
+                style={styles.closeBtn}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+              Adjust quantity per size for <strong>{editingSizeItem.name}</strong>.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '0.75rem' }}>
+              {Object.keys(tempBreakdown).map((size) => (
+                <div key={size} style={{ textAlign: 'center', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.5rem' }}>
+                  <div style={{ fontWeight: '700', fontSize: '0.9rem', marginBottom: '4px' }}>{size}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => setTempBreakdown(p => ({ ...p, [size]: Math.max(0, (p[size] || 0) - 1) }))}
+                      style={{ width: '24px', height: '28px', border: '1px solid var(--border-color)', cursor: 'pointer' }}
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min="0"
+                      value={tempBreakdown[size] || 0}
+                      onChange={(e) => {
+                        const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                        setTempBreakdown(p => ({ ...p, [size]: val }));
+                      }}
+                      style={{ width: '36px', height: '28px', textAlign: 'center', border: '1px solid var(--border-color)', borderLeft: 'none', borderRight: 'none', fontSize: '0.85rem' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTempBreakdown(p => ({ ...p, [size]: (p[size] || 0) + 1 }))}
+                      style={{ width: '24px', height: '28px', border: '1px solid var(--border-color)', cursor: 'pointer' }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '6px' }}>
+              <span>New Total Quantity:</span>
+              <strong style={{ fontSize: '1.1rem', color: 'var(--accent-color)' }}>
+                {Object.values(tempBreakdown).reduce((s, v) => s + (parseInt(v, 10) || 0), 0)} units
+              </strong>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setEditingSizeItem(null)}
+                className="btn btn-outline"
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSizeBreakdown}
+                className="btn btn-accent"
+                style={{ flex: 1.5 }}
+              >
+                Save Quantities
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -388,19 +573,17 @@ export default function CartPage() {
 const styles = {
   page: {
     padding: '3rem 0 5rem',
-    backgroundColor: 'var(--bg-secondary)',
-    minHeight: '85vh',
+    backgroundColor: 'var(--bg-primary)',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: '2rem',
-    flexWrap: 'wrap',
     gap: '1rem',
   },
   title: {
-    fontSize: '2.25rem',
+    fontSize: '2rem',
     color: 'var(--text-primary)',
   },
   clearBtn: {
@@ -438,17 +621,17 @@ const styles = {
   cartItemCard: {
     backgroundColor: 'white',
     borderRadius: 'var(--radius-lg)',
-    padding: '1.5rem',
+    padding: '1.25rem',
     border: '1px solid var(--border-color)',
     boxShadow: 'var(--shadow-sm)',
     display: 'flex',
-    gap: '1.5rem',
+    gap: '1.25rem',
     flexWrap: 'wrap',
   },
   itemImageWrapper: {
     position: 'relative',
-    width: '120px',
-    height: '120px',
+    width: '110px',
+    height: '110px',
     backgroundColor: 'var(--bg-tertiary)',
     borderRadius: 'var(--radius-md)',
     overflow: 'hidden',
@@ -481,23 +664,53 @@ const styles = {
   },
   itemTitleLink: {
     color: 'inherit',
+    textDecoration: 'none',
   },
   itemName: {
-    fontSize: '1.15rem',
+    fontSize: '1.1rem',
     color: 'var(--text-primary)',
     marginBottom: '0.35rem',
   },
   variantTags: {
     display: 'flex',
-    gap: '0.75rem',
+    gap: '0.5rem',
     flexWrap: 'wrap',
-    fontSize: '0.8rem',
+    fontSize: '0.75rem',
     color: 'var(--text-secondary)',
+    marginBottom: '0.4rem',
   },
   tag: {
     backgroundColor: 'var(--bg-secondary)',
     padding: '3px 8px',
     borderRadius: '4px',
+  },
+  sizeBreakdownBox: {
+    backgroundColor: '#f8fafc',
+    border: '1px solid var(--border-color)',
+    borderRadius: '6px',
+    padding: '0.5rem 0.75rem',
+    marginTop: '0.35rem',
+  },
+  editSizesBtn: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: 'var(--accent-color)',
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+  },
+  breakdownChips: {
+    display: 'flex',
+    gap: '6px',
+    flexWrap: 'wrap',
+    marginTop: '4px',
+  },
+  breakdownChip: {
+    backgroundColor: 'white',
+    border: '1px solid var(--border-color)',
+    borderRadius: '4px',
+    padding: '2px 6px',
+    fontSize: '0.75rem',
   },
   viewDesignBtn: {
     fontSize: '0.8rem',
@@ -512,8 +725,9 @@ const styles = {
   quantityRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: '1.25rem',
-    marginTop: '1rem',
+    justifyContent: 'space-between',
+    gap: '1rem',
+    marginTop: '0.85rem',
     flexWrap: 'wrap',
   },
   qtyPicker: {
@@ -521,11 +735,11 @@ const styles = {
     alignItems: 'center',
   },
   qtyBtn: {
-    width: '32px',
-    height: '32px',
+    width: '30px',
+    height: '30px',
     backgroundColor: 'var(--bg-tertiary)',
     border: '1px solid var(--border-color)',
-    fontSize: '1rem',
+    fontSize: '0.9rem',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -533,47 +747,44 @@ const styles = {
     fontWeight: '600',
   },
   qtyInput: {
-    width: '45px',
-    height: '32px',
+    width: '42px',
+    height: '30px',
     textAlign: 'center',
     border: '1px solid var(--border-color)',
     borderLeft: 'none',
     borderRight: 'none',
-    fontSize: '0.9rem',
+    fontSize: '0.85rem',
     fontWeight: '600',
   },
   unitPriceText: {
-    fontSize: '0.95rem',
-    fontWeight: '600',
-    color: 'var(--text-primary)',
+    fontSize: '0.9rem',
+    color: 'var(--text-secondary)',
   },
   removeItemBtn: {
-    marginLeft: 'auto',
-    fontSize: '0.8rem',
-    color: '#94a3b8',
-    background: 'none',
+    backgroundColor: 'transparent',
     border: 'none',
     cursor: 'pointer',
+    fontSize: '1rem',
+    opacity: 0.7,
   },
   summaryColumn: {
-    flex: '1.2',
+    flex: '1',
   },
   summaryCard: {
     backgroundColor: 'white',
     borderRadius: 'var(--radius-lg)',
-    padding: '2rem',
+    padding: '1.5rem',
     border: '1px solid var(--border-color)',
     boxShadow: 'var(--shadow-sm)',
-    position: 'sticky',
-    top: '95px',
   },
   summaryTitle: {
-    fontSize: '1.35rem',
-    color: 'var(--text-primary)',
+    fontSize: '1.25rem',
     marginBottom: '1.25rem',
+    paddingBottom: '0.75rem',
+    borderBottom: '1px solid var(--border-color)',
   },
   couponSection: {
-    marginBottom: '1.5rem',
+    marginBottom: '1.25rem',
   },
   couponForm: {
     display: 'flex',
@@ -581,11 +792,10 @@ const styles = {
   },
   couponInput: {
     flex: 1,
-    padding: '10px 14px',
-    border: '1px solid var(--border-color)',
+    padding: '8px 12px',
     borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-color)',
     fontSize: '0.85rem',
-    textTransform: 'uppercase',
   },
   couponApplyBtn: {
     padding: '8px 16px',
@@ -601,33 +811,30 @@ const styles = {
     borderRadius: 'var(--radius-md)',
   },
   removeCouponBtn: {
+    backgroundColor: 'transparent',
+    border: 'none',
     color: '#dc2626',
     fontSize: '0.75rem',
     fontWeight: '600',
-    background: 'none',
-    border: 'none',
     cursor: 'pointer',
   },
   breakdownRows: {
     display: 'flex',
     flexDirection: 'column',
     gap: '0.75rem',
-    borderTop: '1px solid var(--border-color)',
-    paddingTop: '1rem',
     marginBottom: '1.5rem',
   },
   row: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
     fontSize: '0.9rem',
   },
   rowLabel: {
     color: 'var(--text-secondary)',
   },
   rowValue: {
+    fontWeight: '600',
     color: 'var(--text-primary)',
-    fontWeight: '500',
   },
   totalLabel: {
     fontSize: '1.15rem',
@@ -635,7 +842,7 @@ const styles = {
     color: 'var(--text-primary)',
   },
   totalValue: {
-    fontSize: '1.6rem',
+    fontSize: '1.35rem',
     fontWeight: '800',
     color: 'var(--accent-color)',
   },
@@ -643,6 +850,7 @@ const styles = {
     width: '100%',
     padding: '14px',
     fontSize: '1.05rem',
+    fontWeight: '700',
   },
   trustBadges: {
     marginTop: '1.5rem',
@@ -650,7 +858,7 @@ const styles = {
     flexDirection: 'column',
     gap: '6px',
     borderTop: '1px solid var(--border-color)',
-    paddingTop: '1.25rem',
+    paddingTop: '1rem',
   },
   trustItem: {
     fontSize: '0.75rem',
@@ -716,6 +924,6 @@ const styles = {
     color: 'var(--text-secondary)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '4px',
-  }
+    gap: '6px',
+  },
 };

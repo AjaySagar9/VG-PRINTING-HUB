@@ -532,7 +532,7 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                     <div style={styles.snapshotPrice}>
-                      ₹{(user?.role === 'WHOLESALER' && user?.approvalStatus === 'APPROVED' && it.wholesalePrice ? it.wholesalePrice : it.price) * it.quantity}
+                      ₹{((it.unitPrice || (user?.role === 'WHOLESALER' && user?.approvalStatus === 'APPROVED' && it.wholesalePrice ? it.wholesalePrice : it.price)) * it.quantity).toLocaleString('en-IN')}
                     </div>
                   </div>
                 ))}
@@ -542,7 +542,7 @@ export default function CheckoutPage() {
               <div style={styles.breakdownRows}>
                 <div style={styles.row}>
                   <span style={styles.rowLabel}>Subtotal</span>
-                  <span style={styles.rowValue}>₹{quote?.subtotal || '...'}</span>
+                  <span style={styles.rowValue}>₹{quote?.subtotal?.toLocaleString('en-IN') || '...'}</span>
                 </div>
 
                 {quote?.totalWholesaleSavings > 0 && (
@@ -551,7 +551,18 @@ export default function CheckoutPage() {
                       Wholesale B2B Savings
                     </span>
                     <span style={{ ...styles.rowValue, color: '#059669', fontWeight: '600' }}>
-                      -₹{quote.totalWholesaleSavings}
+                      -₹{quote.totalWholesaleSavings.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                )}
+
+                {quote?.totalRetailTierSavings > 0 && (
+                  <div style={styles.row}>
+                    <span style={{ ...styles.rowLabel, color: '#059669', fontWeight: '600' }}>
+                      Volume Tier Savings
+                    </span>
+                    <span style={{ ...styles.rowValue, color: '#059669', fontWeight: '600' }}>
+                      -₹{quote.totalRetailTierSavings.toLocaleString('en-IN')}
                     </span>
                   </div>
                 )}

@@ -5,6 +5,7 @@ import React, { useState, useRef, useEffect } from 'react';
 export default function ProductCustomizer({
   product,
   selectedColor,
+  currentColorImage,
   onCustomizationChange,
   onDesignConfirmed,
 }) {
@@ -13,11 +14,12 @@ export default function ProductCustomizer({
   );
   const [logoFile, setLogoFile] = useState(null);
   const [logoUrl, setLogoUrl] = useState(null);
+  const [isPdf, setIsPdf] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
   // Positioning & scale
-  const [scale, setScale] = useState(100); // 50 to 150%
+  const [scale, setScale] = useState(100); // 40 to 180%
   const [offsetX, setOffsetX] = useState(0); // -100 to 100
   const [offsetY, setOffsetY] = useState(0); // -100 to 100
 
@@ -25,6 +27,9 @@ export default function ProductCustomizer({
   const [customText, setCustomText] = useState('');
   const [textFont, setTextFont] = useState('Outfit');
   const [textColor, setTextColor] = useState('#ffffff');
+
+  // Customization instructions
+  const [instructions, setInstructions] = useState('');
 
   // Confirmation modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -37,40 +42,55 @@ export default function ProductCustomizer({
   // Available placements
   const availablePlacements = product.placements && product.placements.length > 0
     ? product.placements
-    : ['Front Chest', 'Back', 'Left Chest', 'Sleeve'];
+    : ['Front Chest', 'Back Full', 'Left Chest', 'Sleeve'];
 
-  // Handle Logo Upload
+  // Handle Artwork / Logo Upload
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadError('');
 
-    // Client-side validation
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
-    if (!validTypes.includes(file.type)) {
-      setUploadError('Invalid format. Please upload PNG, JPG, WEBP, or SVG.');
+    // Client-side validation: PNG, JPG, JPEG, WEBP, SVG, PDF
+    const validMimes = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'image/svg+xml',
+      'application/pdf',
+    ];
+    const isPdfFile = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+    if (!validMimes.includes(file.type) && !isPdfFile) {
+      setUploadError('Invalid format. Please upload PNG, JPG, JPEG, WEBP, SVG, or PDF.');
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError('Artwork must be under 10MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      setUploadError('Artwork must be under 15MB.');
       return;
     }
 
-    // Fast local preview
-    const localReader = new FileReader();
-    localReader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        logoImgRef.current = img;
-        drawCanvas();
+    setIsPdf(isPdfFile);
+
+    // If image/svg, generate fast preview
+    if (!isPdfFile) {
+      const localReader = new FileReader();
+      localReader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          logoImgRef.current = img;
+          drawCanvas();
+        };
+        img.src = event.target.result;
       };
-      img.src = event.target.result;
-    };
-    localReader.readAsDataURL(file);
+      localReader.readAsDataURL(file);
+    } else {
+      logoImgRef.current = null;
+    }
 
-    // Upload to server
+    // Upload to backend
     setUploading(true);
     try {
       const formData = new FormData();
@@ -88,29 +108,45 @@ export default function ProductCustomizer({
 
       setLogoUrl(data.url);
       setLogoFile(file.name);
+      if (data.isPdf) {
+        setIsPdf(true);
+      }
     } catch (err) {
-      setUploadError(err.message);
+      setUploadError(err.message || 'Error uploading artwork');
     } finally {
       setUploading(false);
     }
   };
 
-  // Preload base product image
+  // Preload base product image (reacts to currentColorImage or product.imageUrl)
   useEffect(() => {
     const baseImg = new Image();
     baseImg.crossOrigin = 'anonymous';
-    baseImg.src = product.imageUrl || '/navlogo.png';
+    baseImg.src = currentColorImage || product.imageUrl || '/navlogo.png';
     baseImg.onload = () => {
       baseImgRef.current = baseImg;
       drawCanvas();
     };
-  }, [product.imageUrl]);
+  }, [currentColorImage, product.imageUrl]);
 
-  // Redraw canvas whenever parameters change
+  // Redraw canvas whenever any parameter changes
   useEffect(() => {
     drawCanvas();
     updateParent();
-  }, [selectedColor, placement, scale, offsetX, offsetY, customText, textFont, textColor, logoUrl]);
+  }, [
+    selectedColor,
+    currentColorImage,
+    placement,
+    scale,
+    offsetX,
+    offsetY,
+    customText,
+    textFont,
+    textColor,
+    logoUrl,
+    isPdf,
+    instructions,
+  ]);
 
   const updateParent = () => {
     if (onCustomizationChange) {
@@ -118,18 +154,20 @@ export default function ProductCustomizer({
         placement,
         logoUrl,
         logoFileName: logoFile,
+        isPdf,
         scale,
         offsetX,
         offsetY,
         customText,
         textFont,
         textColor,
-        hasCustomization: Boolean(logoUrl || customText),
+        instructions,
+        hasCustomization: Boolean(logoUrl || customText.trim() || instructions.trim()),
       });
     }
   };
 
-  // HTML5 Canvas Composite Renderer
+  // Canvas composite drawing engine
   const drawCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -137,19 +175,17 @@ export default function ProductCustomizer({
     const width = canvas.width;
     const height = canvas.height;
 
-    // Clear
+    // 1. Clear background
     ctx.clearRect(0, 0, width, height);
-
-    // 1. Draw base product background
     ctx.fillStyle = '#f8fafc';
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Draw base product image if loaded
+    // 2. Draw base product image
     if (baseImgRef.current) {
       ctx.drawImage(baseImgRef.current, 0, 0, width, height);
 
-      // Color tint overlay if color is chosen
-      if (selectedColor && selectedColor !== '#ffffff') {
+      // Only apply multiply tint if NO specific color image is loaded and a non-white color is chosen
+      if (!currentColorImage && selectedColor && selectedColor !== '#ffffff' && selectedColor !== 'white') {
         ctx.save();
         ctx.globalCompositeOperation = 'multiply';
         ctx.fillStyle = selectedColor;
@@ -157,38 +193,73 @@ export default function ProductCustomizer({
         ctx.restore();
       }
     } else {
-      // Mockup silhouette placeholder
       ctx.fillStyle = selectedColor || '#e2e8f0';
       ctx.fillRect(40, 40, width - 80, height - 80);
     }
 
-    // 3. Define printable placement area coordinates
-    let printZone = { x: width * 0.3, y: height * 0.3, w: width * 0.4, h: height * 0.35 };
+    // 3. Define printable imprint zones
+    let printZone = { x: width * 0.3, y: height * 0.28, w: width * 0.4, h: height * 0.38 };
     if (placement.includes('Left') || placement.includes('Pocket')) {
-      printZone = { x: width * 0.55, y: height * 0.28, w: width * 0.22, h: height * 0.22 };
+      printZone = { x: width * 0.54, y: height * 0.26, w: width * 0.24, h: height * 0.24 };
     } else if (placement.includes('Back')) {
-      printZone = { x: width * 0.25, y: height * 0.25, w: width * 0.5, h: height * 0.5 };
+      printZone = { x: width * 0.25, y: height * 0.24, w: width * 0.5, h: height * 0.5 };
     } else if (placement.includes('Sleeve')) {
-      printZone = { x: width * 0.15, y: height * 0.35, w: width * 0.2, h: height * 0.25 };
+      printZone = { x: width * 0.14, y: height * 0.34, w: width * 0.22, h: height * 0.26 };
     }
 
-    // Draw dashed printable area guide
+    // Printable dashed boundary
     ctx.save();
-    ctx.strokeStyle = 'rgba(255, 78, 0, 0.45)';
+    ctx.strokeStyle = 'rgba(255, 78, 0, 0.5)';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 4]);
     ctx.strokeRect(printZone.x, printZone.y, printZone.w, printZone.h);
     ctx.restore();
 
-    // 4. Render Logo Artwork
-    if (logoImgRef.current) {
-      ctx.save();
-      const scaleFactor = scale / 100;
-      const targetW = (printZone.w * 0.7) * scaleFactor;
-      const targetH = (targetW * (logoImgRef.current.height / logoImgRef.current.width));
+    // 4. Render Logo / Artwork
+    const scaleFactor = scale / 100;
+    const centerX = printZone.x + (printZone.w / 2) + offsetX;
+    const centerY = printZone.y + (printZone.h / 2) + offsetY - (customText.trim() ? 22 : 0);
 
-      const centerX = printZone.x + (printZone.w / 2) + offsetX;
-      const centerY = printZone.y + (printZone.h / 2) + offsetY - (customText ? 20 : 0);
+    if (isPdf && logoUrl) {
+      // PDF Vector Artwork Placeholder on Canvas
+      ctx.save();
+      const badgeW = Math.min(printZone.w * 0.85, 140) * scaleFactor;
+      const badgeH = badgeW * 0.65;
+      const bX = centerX - badgeW / 2;
+      const bY = centerY - badgeH / 2;
+
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.roundRect(bX, bY, badgeW, badgeH, 6);
+      ctx.fill();
+
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Top red header
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.roundRect(bX, bY, badgeW, Math.max(16, badgeH * 0.35), [6, 6, 0, 0]);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${Math.max(9, Math.round(11 * scaleFactor))}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('PDF VECTOR ARTWORK', centerX, bY + Math.max(12, badgeH * 0.25));
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = `600 ${Math.max(8, Math.round(10 * scaleFactor))}px sans-serif`;
+      const shortName = logoFile ? (logoFile.length > 16 ? logoFile.substring(0, 14) + '...' : logoFile) : 'Attached';
+      ctx.fillText(shortName, centerX, bY + badgeH * 0.75);
+      ctx.restore();
+    } else if (logoImgRef.current) {
+      // Normal Image / SVG Artwork
+      ctx.save();
+      const targetW = (printZone.w * 0.72) * scaleFactor;
+      const targetH = targetW * (logoImgRef.current.height / logoImgRef.current.width);
 
       ctx.drawImage(
         logoImgRef.current,
@@ -204,17 +275,17 @@ export default function ProductCustomizer({
     if (customText.trim()) {
       ctx.save();
       const textX = printZone.x + (printZone.w / 2) + offsetX;
-      const textY = logoImgRef.current
-        ? printZone.y + printZone.h - 15 + offsetY
+      const textY = (logoImgRef.current || isPdf)
+        ? printZone.y + printZone.h - 16 + offsetY
         : printZone.y + (printZone.h / 2) + offsetY;
 
-      ctx.font = `600 ${Math.max(12, Math.round(18 * (scale / 100)))}px ${textFont}, sans-serif`;
+      const fontSize = Math.max(12, Math.round(18 * (scale / 100)));
+      ctx.font = `600 ${fontSize}px ${textFont}, sans-serif`;
       ctx.fillStyle = textColor;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Subtle drop shadow for legibility
-      ctx.shadowColor = 'rgba(0,0,0,0.35)';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
       ctx.shadowBlur = 4;
       ctx.fillText(customText, textX, textY);
       ctx.restore();
@@ -236,15 +307,24 @@ export default function ProductCustomizer({
         placement,
         logoUrl,
         logoFileName: logoFile,
+        isPdf,
         scale,
         offsetX,
         offsetY,
         customText,
         textFont,
         textColor,
+        instructions,
         previewSnapshot: snapshotUrl,
+        hasCustomization: Boolean(logoUrl || customText.trim() || instructions.trim()),
       });
     }
+  };
+
+  const handleResetPosition = () => {
+    setScale(100);
+    setOffsetX(0);
+    setOffsetY(0);
   };
 
   return (
@@ -253,7 +333,7 @@ export default function ProductCustomizer({
         <div>
           <h3 style={styles.customizerTitle}>Interactive Design &amp; Artwork Studio</h3>
           <p style={styles.customizerSubtitle}>
-            Upload your vector logo or artwork, pick placement zones, and preview live on your product.
+            Upload company logo or vector artwork (PNG, JPG, SVG, PDF), add custom text, and see a live product preview.
           </p>
         </div>
         <span style={styles.liveBadge}>● Live Canvas</span>
@@ -272,27 +352,33 @@ export default function ProductCustomizer({
             <div style={styles.placementBadge}>
               Zone: {placement}
             </div>
+            {selectedColor && (
+              <div style={styles.colorBadge}>
+                Color: {selectedColor}
+              </div>
+            )}
           </div>
+
           <div style={styles.canvasLegend}>
-            <span>🟧 Dashed orange box indicates printable imprint boundary.</span>
+            <span>🟧 Dashed orange line indicates printable placement zone.</span>
           </div>
 
           <button
             type="button"
             onClick={handleOpenConfirmation}
             className="btn btn-outline"
-            style={{ width: '100%', marginTop: '0.75rem', fontSize: '0.9rem' }}
+            style={{ width: '100%', marginTop: '0.75rem', fontSize: '0.9rem', fontWeight: '600' }}
           >
-            🔍 View Fullscreen Design Snapshot
+            🔍 Preview Final Design Snapshot
           </button>
         </div>
 
-        {/* RIGHT: Controls & Customization Options */}
+        {/* RIGHT: Customization Controls */}
         <div style={styles.controlsColumn}>
           
           {/* 1. Placement Selector */}
           <div style={styles.controlGroup}>
-            <label style={styles.controlLabel}>Imprint Placement Zone</label>
+            <label style={styles.controlLabel}>1. Select Imprint Placement</label>
             <div style={styles.placementButtons}>
               {availablePlacements.map((p) => (
                 <button
@@ -301,7 +387,7 @@ export default function ProductCustomizer({
                   onClick={() => setPlacement(p)}
                   style={{
                     ...styles.placementBtn,
-                    ...(placement === p ? styles.placementBtnActive : styles.placementBtnInactive)
+                    ...(placement === p ? styles.placementBtnActive : styles.placementBtnInactive),
                   }}
                 >
                   {p}
@@ -313,42 +399,54 @@ export default function ProductCustomizer({
           {/* 2. Logo / Artwork Upload */}
           <div style={styles.controlGroup}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={styles.controlLabel}>Upload Company Logo / Graphic</label>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>PNG, SVG, JPG (Max 10MB)</span>
+              <label style={styles.controlLabel}>2. Upload Company Logo or Graphic</label>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                PNG, JPG, SVG, PDF (Max 15MB)
+              </span>
             </div>
 
             <div style={styles.uploadBox}>
               <input
                 type="file"
                 id="artworkUpload"
-                accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
+                accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml, application/pdf"
                 onChange={handleFileUpload}
                 style={{ display: 'none' }}
               />
               <label htmlFor="artworkUpload" style={styles.uploadLabel}>
-                <span style={{ fontSize: '1.5rem', marginBottom: '4px' }}>📤</span>
+                <span style={{ fontSize: '1.6rem', marginBottom: '4px' }}>📤</span>
                 <span style={{ fontWeight: '600', fontSize: '0.9rem', color: 'var(--accent-color)' }}>
-                  {uploading ? 'Processing & Uploading...' : logoFile ? `Change File (${logoFile})` : 'Choose Artwork File'}
+                  {uploading
+                    ? 'Processing & Uploading Artwork...'
+                    : logoFile
+                    ? `Change Artwork (${logoFile})`
+                    : 'Click to Upload Artwork (PNG, JPG, SVG, PDF)'}
                 </span>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  High resolution transparent PNG or vector SVG recommended
+                  Vector SVG or 300+ DPI transparent PNG recommended for crisp print
                 </span>
               </label>
             </div>
 
             {uploadError && (
-              <p style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }}>⚠️ {uploadError}</p>
+              <p style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }}>
+                ⚠️ {uploadError}
+              </p>
             )}
 
             {logoUrl && (
               <div style={styles.uploadedInfo}>
-                <span>✓ Artwork Loaded: {logoFile}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>{isPdf ? '📄 PDF' : '🖼️ Graphic'}:</span>
+                  <strong>{logoFile}</strong>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
                     logoImgRef.current = null;
                     setLogoUrl(null);
                     setLogoFile(null);
+                    setIsPdf(false);
                     drawCanvas();
                   }}
                   style={styles.removeBtn}
@@ -359,15 +457,26 @@ export default function ProductCustomizer({
             )}
           </div>
 
-          {/* 3. Logo Sizing & Position Adjustment */}
-          {logoUrl && (
+          {/* 3. Logo Sizing & Positioning */}
+          {(logoUrl || customText.trim()) && (
             <div style={styles.adjustmentsBox}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontWeight: '600', fontSize: '0.85rem' }}>Position &amp; Scale Controls</span>
+                <button
+                  type="button"
+                  onClick={handleResetPosition}
+                  style={styles.resetBtn}
+                >
+                  Reset Position
+                </button>
+              </div>
+
               <div style={styles.sliderRow}>
                 <label style={styles.sliderLabel}>Size: {scale}%</label>
                 <input
                   type="range"
-                  min="50"
-                  max="150"
+                  min="40"
+                  max="160"
                   value={scale}
                   onChange={(e) => setScale(Number(e.target.value))}
                   style={{ flex: 1 }}
@@ -403,11 +512,11 @@ export default function ProductCustomizer({
           {/* 4. Custom Text Lines */}
           <div style={styles.controlGroup}>
             <label style={styles.controlLabel}>
-              Custom Line / Employee Name / Tagline <span style={{ fontWeight: 'normal', color: 'var(--text-tertiary)' }}>(Optional)</span>
+              3. Add Custom Text <span style={{ fontWeight: 'normal', color: 'var(--text-tertiary)' }}>(If no logo or employee name)</span>
             </label>
             <input
               type="text"
-              placeholder="e.g. John Doe - Tech Lead"
+              placeholder="e.g. John Doe / Team Lead"
               value={customText}
               onChange={(e) => setCustomText(e.target.value)}
               className="input-field"
@@ -417,7 +526,7 @@ export default function ProductCustomizer({
             {customText.trim() && (
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Font</label>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Font Style</label>
                   <select
                     value={textFont}
                     onChange={(e) => setTextFont(e.target.value)}
@@ -427,7 +536,7 @@ export default function ProductCustomizer({
                     <option value="Outfit">Modern Clean (Outfit)</option>
                     <option value="Arial">Bold Block (Arial)</option>
                     <option value="Georgia">Classic Serif (Georgia)</option>
-                    <option value="Courier New">Monospace / Tech</option>
+                    <option value="Courier New">Monospace Tech (Courier)</option>
                   </select>
                 </div>
 
@@ -447,12 +556,28 @@ export default function ProductCustomizer({
                           border: textColor === c ? '2px solid var(--accent-color)' : '1px solid #ccc',
                           cursor: 'pointer',
                         }}
+                        title={c}
                       />
                     ))}
                   </div>
                 </div>
               </div>
             )}
+          </div>
+
+          {/* 5. Customization Instructions */}
+          <div style={styles.controlGroup}>
+            <label style={styles.controlLabel}>
+              4. Customization &amp; Print Instructions <span style={{ fontWeight: 'normal', color: 'var(--text-tertiary)' }}>(Optional)</span>
+            </label>
+            <textarea
+              rows={2}
+              placeholder="e.g. Print logo 3.5 inches wide, use golden embroidery thread, maintain 2 inch distance from collar..."
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              className="input-field"
+              style={{ fontSize: '0.85rem', resize: 'vertical' }}
+            />
           </div>
         </div>
       </div>
@@ -462,7 +587,7 @@ export default function ProductCustomizer({
         <div style={styles.modalOverlay}>
           <div style={styles.modalContent}>
             <div style={styles.modalHeader}>
-              <h3 style={{ fontSize: '1.25rem' }}>Final Custom Design Preview</h3>
+              <h3 style={{ fontSize: '1.25rem', margin: 0 }}>Final Custom Design Preview</h3>
               <button
                 type="button"
                 onClick={() => setShowConfirmModal(false)}
@@ -472,18 +597,60 @@ export default function ProductCustomizer({
               </button>
             </div>
 
-            <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: '#f1f5f9', borderRadius: 'var(--radius-md)' }}>
-              <img
-                src={snapshotUrl}
-                alt="Customized Product Preview"
-                style={{ maxWidth: '100%', maxHeight: '360px', objectFit: 'contain', borderRadius: 'var(--radius-md)' }}
-              />
-            </div>
+            <div style={styles.modalBody}>
+              <div style={styles.modalImageWrapper}>
+                <img
+                  src={snapshotUrl}
+                  alt="Customized Product Preview"
+                  style={styles.modalImage}
+                />
+              </div>
 
-            <div style={styles.modalSummary}>
-              <div><strong>Placement:</strong> {placement}</div>
-              {logoFile && <div><strong>Logo File:</strong> {logoFile}</div>}
-              {customText && <div><strong>Custom Text:</strong> &ldquo;{customText}&rdquo; ({textFont})</div>}
+              <div style={styles.modalSummary}>
+                <div style={styles.summaryItem}>
+                  <span style={styles.summaryLabel}>Product:</span>
+                  <span>{product.name}</span>
+                </div>
+                {selectedColor && (
+                  <div style={styles.summaryItem}>
+                    <span style={styles.summaryLabel}>Selected Color:</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <span
+                        style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          backgroundColor: selectedColor,
+                          border: '1px solid #ccc',
+                        }}
+                      />
+                      {selectedColor}
+                    </span>
+                  </div>
+                )}
+                <div style={styles.summaryItem}>
+                  <span style={styles.summaryLabel}>Imprint Placement:</span>
+                  <strong>{placement}</strong>
+                </div>
+                {logoFile && (
+                  <div style={styles.summaryItem}>
+                    <span style={styles.summaryLabel}>Artwork:</span>
+                    <span>{isPdf ? '📄 PDF Document' : '🖼️ Graphic'} ({logoFile})</span>
+                  </div>
+                )}
+                {customText.trim() && (
+                  <div style={styles.summaryItem}>
+                    <span style={styles.summaryLabel}>Custom Text:</span>
+                    <span>&ldquo;{customText}&rdquo; ({textFont})</span>
+                  </div>
+                )}
+                {instructions.trim() && (
+                  <div style={styles.summaryItem}>
+                    <span style={styles.summaryLabel}>Instructions:</span>
+                    <span style={{ fontStyle: 'italic' }}>{instructions}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={styles.modalActions}>
@@ -493,15 +660,15 @@ export default function ProductCustomizer({
                 className="btn btn-outline"
                 style={{ flex: 1 }}
               >
-                Make Adjustments
+                Edit Design
               </button>
               <button
                 type="button"
                 onClick={handleConfirmFinal}
                 className="btn btn-accent"
-                style={{ flex: 1 }}
+                style={{ flex: 1.5 }}
               >
-                ✓ Confirm &amp; Save Design
+                ✓ Apply Design &amp; Order
               </button>
             </div>
           </div>
@@ -517,7 +684,7 @@ const styles = {
     borderRadius: 'var(--radius-lg)',
     border: '1px solid var(--border-color)',
     padding: '1.75rem',
-    marginTop: '2rem',
+    marginTop: '2.5rem',
     boxShadow: 'var(--shadow-sm)',
   },
   titleRow: {
@@ -525,17 +692,19 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: '1.5rem',
-    flexWrap: 'wrap',
-    gap: '0.5rem',
+    paddingBottom: '1rem',
+    borderBottom: '1px solid var(--border-color)',
   },
   customizerTitle: {
     fontSize: '1.35rem',
+    fontWeight: '700',
     color: 'var(--text-primary)',
-    marginBottom: '0.2rem',
+    marginBottom: '0.25rem',
   },
   customizerSubtitle: {
-    fontSize: '0.85rem',
+    fontSize: '0.875rem',
     color: 'var(--text-secondary)',
+    margin: 0,
   },
   liveBadge: {
     backgroundColor: '#ecfdf5',
@@ -543,12 +712,12 @@ const styles = {
     fontSize: '0.75rem',
     fontWeight: '700',
     padding: '4px 10px',
-    borderRadius: '9999px',
+    borderRadius: '999px',
     border: '1px solid #a7f3d0',
   },
   layout: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gridTemplateColumns: '1fr 1fr',
     gap: '2rem',
   },
   previewColumn: {
@@ -559,9 +728,9 @@ const styles = {
   canvasWrapper: {
     position: 'relative',
     width: '100%',
-    maxWidth: '420px',
+    maxWidth: '440px',
     aspectRatio: '1/1',
-    borderRadius: 'var(--radius-lg)',
+    borderRadius: 'var(--radius-md)',
     overflow: 'hidden',
     border: '1px solid var(--border-color)',
     boxShadow: 'var(--shadow-sm)',
@@ -574,19 +743,30 @@ const styles = {
   },
   placementBadge: {
     position: 'absolute',
-    top: '12px',
-    left: '12px',
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    top: '10px',
+    left: '10px',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
     color: 'white',
-    fontSize: '0.75rem',
-    fontWeight: '600',
     padding: '4px 10px',
     borderRadius: '4px',
-    backdropFilter: 'blur(4px)',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+  },
+  colorBadge: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    color: 'var(--text-primary)',
+    padding: '4px 10px',
+    borderRadius: '4px',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    border: '1px solid #cbd5e1',
   },
   canvasLegend: {
     fontSize: '0.75rem',
-    color: 'var(--text-tertiary)',
+    color: 'var(--text-secondary)',
     marginTop: '0.5rem',
     textAlign: 'center',
   },
@@ -598,11 +778,11 @@ const styles = {
   controlGroup: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem',
+    gap: '0.35rem',
   },
   controlLabel: {
-    fontSize: '0.875rem',
     fontWeight: '600',
+    fontSize: '0.9rem',
     color: 'var(--text-primary)',
   },
   placementButtons: {
@@ -612,19 +792,19 @@ const styles = {
   },
   placementBtn: {
     padding: '8px 14px',
-    borderRadius: 'var(--radius-md)',
+    borderRadius: '6px',
     fontSize: '0.85rem',
-    fontWeight: '500',
+    fontWeight: '600',
     cursor: 'pointer',
-    transition: 'all var(--transition-fast)',
+    transition: 'all 0.15s ease',
   },
   placementBtnActive: {
-    backgroundColor: 'var(--text-primary)',
+    backgroundColor: 'var(--accent-color)',
     color: 'white',
-    border: '1px solid var(--text-primary)',
+    border: '1px solid var(--accent-color)',
   },
   placementBtnInactive: {
-    backgroundColor: 'var(--bg-secondary)',
+    backgroundColor: 'white',
     color: 'var(--text-secondary)',
     border: '1px solid var(--border-color)',
   },
@@ -633,9 +813,9 @@ const styles = {
     borderRadius: 'var(--radius-md)',
     padding: '1.25rem',
     textAlign: 'center',
-    backgroundColor: 'var(--bg-secondary)',
     cursor: 'pointer',
-    transition: 'border-color var(--transition-fast)',
+    backgroundColor: '#fafafa',
+    transition: 'border-color 0.2s',
   },
   uploadLabel: {
     display: 'flex',
@@ -647,39 +827,44 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#ecfdf5',
-    padding: '6px 12px',
-    borderRadius: 'var(--radius-sm)',
-    color: '#065f46',
-    fontSize: '0.8rem',
-    fontWeight: '500',
+    backgroundColor: '#f1f5f9',
+    padding: '8px 12px',
+    borderRadius: '6px',
+    fontSize: '0.85rem',
+    marginTop: '6px',
   },
   removeBtn: {
+    backgroundColor: 'transparent',
+    border: 'none',
     color: '#dc2626',
     fontWeight: '600',
-    background: 'none',
-    border: 'none',
+    fontSize: '0.8rem',
     cursor: 'pointer',
-    fontSize: '0.75rem',
   },
   adjustmentsBox: {
-    backgroundColor: 'var(--bg-secondary)',
+    backgroundColor: '#f8fafc',
     padding: '1rem',
     borderRadius: 'var(--radius-md)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
+    border: '1px solid var(--border-color)',
+  },
+  resetBtn: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: 'var(--accent-color)',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    cursor: 'pointer',
   },
   sliderRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: '1rem',
+    gap: '0.75rem',
+    marginTop: '0.35rem',
   },
   sliderLabel: {
-    fontSize: '0.75rem',
-    fontWeight: '600',
+    fontSize: '0.8rem',
     color: 'var(--text-secondary)',
-    minWidth: '100px',
+    width: '110px',
   },
   modalOverlay: {
     position: 'fixed',
@@ -687,49 +872,72 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    zIndex: 999,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1000,
     padding: '1rem',
-    backdropFilter: 'blur(3px)',
   },
   modalContent: {
     backgroundColor: 'white',
     borderRadius: 'var(--radius-lg)',
+    maxWidth: '540px',
     width: '100%',
-    maxWidth: '520px',
-    padding: '1.75rem',
-    boxShadow: 'var(--shadow-lg)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1.25rem',
+    padding: '1.5rem',
+    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
   },
   modalHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: '1rem',
   },
   closeBtn: {
-    background: 'none',
+    backgroundColor: 'transparent',
     border: 'none',
     fontSize: '1.25rem',
     cursor: 'pointer',
     color: 'var(--text-secondary)',
   },
-  modalSummary: {
-    fontSize: '0.875rem',
-    color: 'var(--text-secondary)',
+  modalBody: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '4px',
-    backgroundColor: 'var(--bg-secondary)',
+    gap: '1rem',
+  },
+  modalImageWrapper: {
+    textAlign: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 'var(--radius-md)',
+    padding: '0.75rem',
+  },
+  modalImage: {
+    maxWidth: '100%',
+    maxHeight: '280px',
+    objectFit: 'contain',
+    borderRadius: 'var(--radius-md)',
+  },
+  modalSummary: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.4rem',
+    fontSize: '0.85rem',
+    backgroundColor: '#fafafa',
     padding: '0.75rem 1rem',
     borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-color)',
+  },
+  summaryItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+  },
+  summaryLabel: {
+    color: 'var(--text-secondary)',
+    fontWeight: '500',
   },
   modalActions: {
     display: 'flex',
-    gap: '1rem',
-  }
+    gap: '0.75rem',
+    marginTop: '1.25rem',
+  },
 };

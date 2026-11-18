@@ -64,6 +64,7 @@ export function CartProvider({ children }) {
             quantity: it.quantity,
             selectedColor: it.selectedColor,
             selectedSize: it.selectedSize,
+            sizeBreakdown: it.sizeBreakdown,
             customization: it.customization,
           })),
           couponCode: codeToUse,
@@ -108,6 +109,30 @@ export function CartProvider({ children }) {
 
     setItems((prev) =>
       prev.map((item) => (item.id === itemId ? { ...item, quantity: qty } : item))
+    );
+  };
+
+  const updateSizeBreakdown = (itemId, newBreakdown) => {
+    if (!newBreakdown || typeof newBreakdown !== 'object') return;
+    const totalQty = Object.values(newBreakdown).reduce((sum, v) => sum + (parseInt(v, 10) || 0), 0);
+    if (totalQty <= 0) return;
+
+    const sizeDescription = Object.entries(newBreakdown)
+      .filter(([_, q]) => q > 0)
+      .map(([s, q]) => `${s}: ${q}`)
+      .join(', ');
+
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              sizeBreakdown: newBreakdown,
+              quantity: totalQty,
+              selectedSize: sizeDescription || item.selectedSize,
+            }
+          : item
+      )
     );
   };
 
@@ -165,6 +190,7 @@ export function CartProvider({ children }) {
         items,
         addItem,
         updateQuantity,
+        updateSizeBreakdown,
         removeItem,
         clearCart,
         totalCount,

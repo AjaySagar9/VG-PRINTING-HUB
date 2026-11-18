@@ -70,6 +70,21 @@ async function seed() {
       ratingCount: 128,
       discountPercent: 20,
       colors: ['#ffffff', '#1a1a1a', '#1e3a8a', '#991b1b', '#374151', '#047857'],
+      disabledColors: ['#047857'],
+      colorImages: JSON.stringify({
+        '#ffffff': 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80',
+        '#1a1a1a': 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=800&auto=format&fit=crop&q=80',
+        '#1e3a8a': 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=800&auto=format&fit=crop&q=80',
+        '#991b1b': 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=800&auto=format&fit=crop&q=80',
+        '#374151': 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&auto=format&fit=crop&q=80',
+        '#047857': 'https://images.unsplash.com/photo-1622445268121-ac3035b37234?w=800&auto=format&fit=crop&q=80'
+      }),
+      pricingTiers: JSON.stringify([
+        { minQty: 1, maxQty: 9, price: 499, wholesalePrice: 320 },
+        { minQty: 10, maxQty: 49, price: 449, wholesalePrice: 280 },
+        { minQty: 50, maxQty: 99, price: 399, wholesalePrice: 260 },
+        { minQty: 100, maxQty: null, price: 349, wholesalePrice: 230 }
+      ]),
       sizes: ['S', 'M', 'L', 'XL', '2XL', '3XL'],
       placements: ['Front Chest', 'Back Full', 'Left Chest Pocket', 'Right Sleeve'],
       customizable: true,
@@ -94,6 +109,18 @@ async function seed() {
       ratingCount: 94,
       discountPercent: 15,
       colors: ['#ffffff', '#0f172a', '#1e40af', '#15803d', '#dc2626'],
+      disabledColors: ['#dc2626'],
+      colorImages: JSON.stringify({
+        '#ffffff': 'https://images.unsplash.com/photo-1586363104862-3a5e2ab60d99?w=800&auto=format&fit=crop&q=80',
+        '#0f172a': 'https://images.unsplash.com/photo-1625910513413-5b8d0092c4e1?w=800&auto=format&fit=crop&q=80',
+        '#1e40af': 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=800&auto=format&fit=crop&q=80'
+      }),
+      pricingTiers: JSON.stringify([
+        { minQty: 1, maxQty: 9, price: 699, wholesalePrice: 480 },
+        { minQty: 10, maxQty: 49, price: 629, wholesalePrice: 420 },
+        { minQty: 50, maxQty: 99, price: 559, wholesalePrice: 380 },
+        { minQty: 100, maxQty: null, price: 499, wholesalePrice: 340 }
+      ]),
       sizes: ['M', 'L', 'XL', '2XL'],
       placements: ['Left Chest Embroidery', 'Back Collar', 'Sleeve'],
       customizable: true,
@@ -120,6 +147,12 @@ async function seed() {
       ratingCount: 76,
       discountPercent: 25,
       colors: ['#1a1a1a', '#374151', '#1e3a8a', '#7f1d1d', '#f3f4f6'],
+      pricingTiers: JSON.stringify([
+        { minQty: 1, maxQty: 9, price: 1299, wholesalePrice: 890 },
+        { minQty: 10, maxQty: 49, price: 1149, wholesalePrice: 790 },
+        { minQty: 50, maxQty: 99, price: 999, wholesalePrice: 740 },
+        { minQty: 100, maxQty: null, price: 899, wholesalePrice: 680 }
+      ]),
       sizes: ['S', 'M', 'L', 'XL', '2XL'],
       placements: ['Front Center', 'Back Center', 'Left Chest', 'Sleeve Line'],
       customizable: true,

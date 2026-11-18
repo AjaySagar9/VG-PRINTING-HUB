@@ -14,19 +14,26 @@ export async function POST(request) {
     }
 
     // Validate mime type
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
+    const allowedTypes = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'image/svg+xml',
+      'application/pdf',
+    ];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Invalid file type. Allowed formats: PNG, JPG, JPEG, WEBP, SVG' },
+        { error: 'Invalid file type. Allowed formats: PNG, JPG, JPEG, WEBP, SVG, PDF' },
         { status: 400 }
       );
     }
 
-    // Validate size (max 10MB)
-    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    // Validate size (max 15MB)
+    const MAX_SIZE = 15 * 1024 * 1024; // 15MB
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
-        { error: 'File size exceeds maximum allowed limit of 10MB' },
+        { error: 'File size exceeds maximum allowed limit of 15MB' },
         { status: 400 }
       );
     }
@@ -55,6 +62,7 @@ export async function POST(request) {
       originalName: file.name,
       size: file.size,
       mimeType: file.type,
+      isPdf: file.type === 'application/pdf',
       message: 'Artwork uploaded successfully',
     });
 

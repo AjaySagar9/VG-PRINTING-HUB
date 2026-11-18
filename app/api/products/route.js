@@ -4,6 +4,36 @@ import { getCurrentUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
+function sanitizePricingTiers(tiersRaw, isApprovedWholesaler) {
+  if (!tiersRaw) return [];
+  try {
+    const parsed = typeof tiersRaw === 'string' ? JSON.parse(tiersRaw) : tiersRaw;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((t) => {
+      const tier = {
+        minQty: Number(t.minQty) || 1,
+        maxQty: t.maxQty != null && t.maxQty !== '' ? Number(t.maxQty) : null,
+        price: Number(t.price) || 0,
+      };
+      if (isApprovedWholesaler) {
+        tier.wholesalePrice = t.wholesalePrice != null ? Number(t.wholesalePrice) : null;
+      }
+      return tier;
+    });
+  } catch (e) {
+    return [];
+  }
+}
+
+function parseColorImages(colorImagesRaw) {
+  if (!colorImagesRaw) return {};
+  try {
+    return typeof colorImagesRaw === 'string' ? JSON.parse(colorImagesRaw) : colorImagesRaw;
+  } catch (e) {
+    return {};
+  }
+}
+
 export async function GET(request) {
   try {
     const user = await getCurrentUser();
@@ -32,16 +62,25 @@ export async function GET(request) {
         return NextResponse.json({ error: 'Product not found' }, { status: 404 });
       }
 
+      const parsedTiers = sanitizePricingTiers(product.pricingTiers, isApprovedWholesaler);
+      const parsedColorImages = parseColorImages(product.colorImages);
+
       const { wholesalePrice, ...retailOnly } = product;
       const sanitized = isApprovedWholesaler
         ? {
             ...product,
             wholesalePrice: wholesalePrice || Math.round(product.price * 0.6),
             canAccessWholesale: true,
+            parsedPricingTiers: parsedTiers,
+            parsedColorImages,
+            disabledColors: product.disabledColors || [],
           }
         : {
             ...retailOnly,
             canAccessWholesale: false,
+            parsedPricingTiers: parsedTiers,
+            parsedColorImages,
+            disabledColors: product.disabledColors || [],
           };
 
       return NextResponse.json({
